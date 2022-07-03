@@ -65,27 +65,17 @@ void setup()
   lcd.print("Files");
   lcd.setCursor(2,3);
   lcd.print("Apps");
-  os();
 }
    
 
 void loop()
-{
-
-  
-  // ok 14535
-  // up 6375
-  // left 4335
-  // right 23205
-  // down 19125
-}
-void os()
 {
   int selected_option = mainMenu();
   Serial.println(selected_option);
   if (selected_option == 1)
   {
     create_file();
+    
   }
   else if (selected_option == 2)
   {
@@ -95,16 +85,53 @@ void os()
   {
     apps();
   }
+  // ok 14535
+  // up 6375
+  // left 4335
+  // right 23205
+  // down 19125
 }
-int create_file()
+
+void create_file()
 {
+  clean_screen();
   lcd.setCursor(0,0);
   lcd.print("File Name:"); 
-  String input_str;
-  input_str = input(11,0);
-  Serial.println(input_str);
-  Serial.print("bwoahn");
-  return 0;
+  String fileName = keyboard_input(10,0,"<ENTER>");
+  clean_screen();
+  lcd.setCursor(0,0);
+  lcd.print("<");
+  lcd.print(fileName);
+  lcd.print(">");
+  String fileData = keyboard_input(0,1,"<OK>");
+  int len = fileName.length() + fileData.length();
+  len += String(fileName.length()).length();
+  len += String(fileData.length()).length();
+  int addr;
+  for (int i=0; i < 1024; i++)
+  {
+    int x = 0;
+    if ( EEPROM.read(i) == 255 )
+    {
+      for (int ii=i; ii < 1024; ii++)
+      {
+        if (EEPROM.read(i) == 255)
+        {
+          x++;
+        }
+      }
+      if (x > len)
+      {
+        addr = i;
+        break;
+      }
+    }
+  }
+  Serial.print("Addr:");
+  Serial.println(addr);
+  String input = String(fileName.length()) + fileName + String(fileData.length()) + fileData;
+  writeStringToEEPROM(addr,input);
+  clean_screen();
   
 }
 void files()
@@ -115,6 +142,42 @@ void apps()
 {
   
 }
+String keyboard_input(int x, int y, String button)
+{
+  String input;
+  String key;
+  while (true)
+  {
+    if (irrecv.decode(&results))
+    {
+      
+      key = ReadKeyboard(results.value);
+      if (key == "<DELETE>")
+      {
+        input = "";
+        lcd.setCursor(x,y);
+        lcd.print("                             ");
+      }
+      else if (key == button)
+      {
+        break;
+      }
+      else
+      {
+        input += key;
+      }
+      lcd.setCursor(x,y);
+      lcd.print(input);
+      digitalWrite(2, HIGH); 
+      delay(100); 
+      digitalWrite(2, LOW); 
+      irrecv.resume();
+      
+    } 
+    
+  }
+  return input;
+}
 void clean_screen()
 {
   for (int i=0; i<4; i++)
@@ -123,42 +186,7 @@ void clean_screen()
     lcd.print("                              ");
   }
 }
-String input(int x, int y)
-{
-  String key;
-  String input;
-  while (true)
-  {
-    if (irrecv.decode(&results))
-    {
-      if (results.value == 16726215)
-      {
-        return input;
-      }
-      key = ReadKeyboard(results.value);
-      if (key == "<ENTER>")
-      {
-        input = "";
-        lcd.setCursor(x,y);
-        lcd.print("                             ");
-      }
-      else
-      {
-        input += key;
-      }
-      lcd.setCursor(x,y);
-      lcd.print(input);
-      irrecv.resume();
-      digitalWrite(2, HIGH); 
-      delay(100); 
-      digitalWrite(2, LOW); 
-      
-    } 
-    
-  }
 
-
-}
 int mainMenu()
 {
   int menu_page_int = 1;
@@ -233,7 +261,7 @@ void Erase()
 }
 String ReadKeyboard(int result)
 {
-  Serial.print(result);
+  Serial.println(result);
   if (result == -9691)
   {
     return "a";
@@ -365,6 +393,50 @@ String ReadKeyboard(int result)
   else if (result == 18360)
   {
     return "<DELETE>";
+  }
+  else if(result == -23971)
+  {
+    return "1";
+  }
+  else if(result == 25245)
+  {
+    return "2";
+  }
+  else if(result == -7651)
+  {
+    return "3";
+  }
+  else if(result == 3021)
+  {
+    return "4";
+  }
+  else if(result == 765)
+  {
+    return "5";
+  }
+  else if(result == -15811)
+  {
+    return "6";
+  }
+  else if(result == -8161)
+  {
+    return "7";
+  }
+  else if(result ==  -22441)
+  {
+    return "8";
+  }
+  else if(result ==  -28561)
+  {
+    return "9";
+  }
+  else if(result ==  -26521)
+  {
+    return "0";
+  }
+  else if(result ==  14535)
+  {
+    return "<OK>";
   }
   return "";
 }
