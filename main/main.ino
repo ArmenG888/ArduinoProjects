@@ -1,443 +1,217 @@
 #include <IRremote.hpp>
-#include <EEPROM.h>
-#include <Wire.h> 
-#include <LiquidCrystal_I2C.h>
+// Include application, user and local libraries
+#include "SPI.h"
+#include "TFT_22_ILI9225.h"
 
-LiquidCrystal_I2C lcd(0x27,20,4);
+// Include font definition files
+// NOTE: These files may not have all characters defined! Check the GFXfont def
+// params 3 + 4, e.g. 0x20 = 32 = space to 0x7E = 126 = ~
 
+#include <../fonts/FreeMono9pt7b.h>
+#include <../fonts/FreeSans24pt7b.h>
 
-int RECV_PIN = 11;
-IRrecv irrecv(RECV_PIN);
-decode_results results;
+#if defined (ARDUINO_ARCH_STM32F1)
+#define TFT_RST PA1
+#define TFT_RS  PA2
+#define TFT_CS  PA0 // SS
+#define TFT_SDI PA7 // MOSI
+#define TFT_CLK PA5 // SCK
+#define TFT_LED 0 // 0 if wired to +5V directly
+#elif defined(ESP8266)
+#define TFT_RST 4   // D2
+#define TFT_RS  5   // D1
+#define TFT_CLK 14  // D5 SCK
+//#define TFT_SDO 12  // D6 MISO
+#define TFT_SDI 13  // D7 MOSI
+#define TFT_CS  15  // D8 SS
+#define TFT_LED 2   // D4     set 0 if wired to +5V directly -> D3=0 is not possible !!
+#elif defined(ESP32)
+#define TFT_RST 26  // IO 26
+#define TFT_RS  25  // IO 25
+#define TFT_CLK 14  // HSPI-SCK
+//#define TFT_SDO 12  // HSPI-MISO
+#define TFT_SDI 13  // HSPI-MOSI
+#define TFT_CS  15  // HSPI-SS0
+#define TFT_LED 0   // 0 if wired to +5V directly
+SPIClass hspi(HSPI);
+#else
+#define TFT_RST 8
+#define TFT_RS  9
+#define TFT_CS  10  // SS
+#define TFT_SDI 11  // MOSI
+#define TFT_CLK 13  // SCK
+#define TFT_LED 3   // 0 if wired to +5V directly
+#endif
 
+#define TFT_BRIGHTNESS 200 // Initial brightness of TFT backlight (optional)
 
-void setup()
-{
+// Use hardware SPI (faster - on Uno: 13-SCK, 12-MISO, 11-MOSI)
+TFT_22_ILI9225 tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_LED, TFT_BRIGHTNESS);
+// Use software SPI (slower)
+//TFT_22_ILI9225 tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_SDI, TFT_CLK, TFT_LED, TFT_BRIGHTNESS);
+
+// Variables and constants
+int16_t x=0, y=20, w, h;
+
+#include <IRremote.h>     
+int RECV_PIN = 7; 
+IRrecv irrecv(RECV_PIN);     
+decode_results results;    
+// Setup
+void setup() {
   
-    Serial.begin(9600);
-    lcd.begin();
-    lcd.backlight();
-    pinMode(2, OUTPUT);  
-    irrecv.enableIRIn();
-    int bytes_empty = 0;
-    int x = 0;
-    lcd.setCursor(0,0);
-    lcd.print("booting...");
-    for (int i=0; i < 1024; i++)
-    { 
-      if (EEPROM.read(i) == 255)
-      {
-        bytes_empty++;
-        
-      }
-      char data;
-      if (x == 10)
-      {
-        x = 0;
-        Serial.print(" Byte:");
-        Serial.print(i+1);
-        Serial.print("=");
-        data = EEPROM.read(i);
-        Serial.println(data);
-      }
-      else{
-        x++;
-        Serial.print(" Byte:");
-        Serial.print(i+1);
-        Serial.print("=");
-        data = EEPROM.read(i);
-        Serial.print(data);
-      }
-      
-    }
-   Serial.print("\n");
-   Serial.print(1024-bytes_empty);
-   Serial.print(" bytes ");
-   Serial.print("used out of 1024. ");
-   Serial.print(bytes_empty);
-   Serial.print(" bytes left");
-   lcd.setCursor(0,0);
-   lcd.print(1024-bytes_empty);
-   lcd.print("/1024B   ");
-   lcd.setCursor(2,1);
-  lcd.print("Create Files");
-  lcd.setCursor(2,2);
-  lcd.print("Files");
-  lcd.setCursor(2,3);
-  lcd.print("Apps");
+#if defined(ESP32)
+  hspi.begin();
+  tft.begin(hspi);
+#else
+  tft.begin();
+#endif
+  tft.clear();
+  tft.setGFXFont(&FreeMono9pt7b);  
+  String s3 = "~"; 
+  y += h; 
+  tft.drawGFXText(x, y, s3, COLOR_WHITE);
+  s3 = "$"; 
+  y += h; 
+  x += 10;
+  tft.drawGFXText(x, y, s3, COLOR_GREEN);
+  x += 10;
+  Serial.begin(9600);     
+  irrecv.enableIRIn();   
+  
 }
-   
+// Loop
+int menu_mode = 0;
+String command = "";
+void loop() {
+    if (irrecv.decode(&results)){  
 
-void loop()
-{
-  int selected_option = mainMenu();
-  Serial.println(selected_option);
-  if (selected_option == 1)
-  {
-    create_file();
-    
-  }
-  else if (selected_option == 2)
-  {
-    files();
-  }
-  else if (selected_option == 3)
-  {
-    apps();
-  }
-  // ok 14535
-  // up 6375
-  // left 4335
-  // right 23205
-  // down 19125
-}
-
-void create_file()
-{
-  clean_screen();
-  lcd.setCursor(0,0);
-  lcd.print("File Name:"); 
-  String fileName = keyboard_input(10,0,"<ENTER>");
-  clean_screen();
-  lcd.setCursor(0,0);
-  lcd.print("<");
-  lcd.print(fileName);
-  lcd.print(">");
-  String fileData = keyboard_input(0,1,"<OK>");
-  int len = fileName.length() + fileData.length();
-  len += String(fileName.length()).length();
-  len += String(fileData.length()).length();
-  int addr;
-  for (int i=0; i < 1024; i++)
-  {
-    int x = 0;
-    if ( EEPROM.read(i) == 255 )
-    {
-      for (int ii=i; ii < 1024; ii++)
-      {
-        if (EEPROM.read(i) == 255)
+        if (menu_mode == 0)
         {
-          x++;
-        }
-      }
-      if (x > len)
-      {
-        addr = i;
-        break;
-      }
+            Serial.println(" ");     
+            Serial.print("Code: ");     
+            Serial.println(ReadKeyboard(results.value));   
+            if (ReadKeyboard(results.value) != "" && ReadKeyboard(results.value) != "<ENTER>"){
+              y += h; 
+              x += 10;
+              if (x == 170)
+              {
+                y += 20;
+                x = 0;
+              }
+              tft.drawGFXText(x, y,ReadKeyboard(results.value), COLOR_WHITE);
+              Serial.println(" ");   
+              command += ReadKeyboard(results.value);  
+            }
+            if (ReadKeyboard(results.value) == "<ENTER>"){
+                Serial.println(command); 
+                if (menu_mode == 0)
+                {
+                  y += 15;
+                  x = 0;
+                  y += h; 
+                  tft.drawGFXText(x, y, Command(command), COLOR_WHITE);
+                  y += 15;
+                  x = 0;
+                  y += h; 
+                  tft.drawGFXText(x, y, "~", COLOR_WHITE);
+                  y += h; 
+                  x += 10;
+                  tft.drawGFXText(x, y, "$", COLOR_GREEN);
+                  x += 10;
+                  command = "";
+                }
+            }
+            
+        }    
+        else if(menu_mode == 1)
+        {
+          if (ReadKeyboard(results.value) != "" && ReadKeyboard(results.value) != "<ENTER>"){
+              y += h; 
+              x += 10;
+              if (x == 170)
+              {
+                y += 20;
+                x = 0;
+              }
+              tft.drawGFXText(x, y,ReadKeyboard(results.value), COLOR_WHITE);
+              Serial.println(" ");   
+              command += ReadKeyboard(results.value);  
+          }
+          else if(ReadKeyboard(results.value) == "<ENTER>")
+          {
+              y += h + 20;
+              x = 0;
+              command += "\n";
+          }
+       }
+       irrecv.resume(); 
+    }   
+}
+void vi(){
+  menu_mode = 1;
+  tft.clear();
+  x,y = 0,0;
+  command = "";
+}
+String Command(String comd){
+    if (comd == "cls" || comd == "clear"){
+      y = 0;
+      tft.clear();
+      return "";
     }
-  }
-  Serial.print("Addr:");
-  Serial.println(addr);
-  String input = String(fileName.length()) + fileName + String(fileData.length()) + fileData;
-  writeStringToEEPROM(addr,input);
-  clean_screen();
-  
-}
-void files()
-{
-  
-}
-void apps()
-{
-  
-}
-String keyboard_input(int x, int y, String button)
-{
-  String input;
-  String key;
-  while (true)
-  {
-    if (irrecv.decode(&results))
-    {
-      
-      key = ReadKeyboard(results.value);
-      if (key == "<DELETE>")
-      {
-        input = "";
-        lcd.setCursor(x,y);
-        lcd.print("                             ");
-      }
-      else if (key == button)
-      {
-        break;
-      }
-      else
-      {
-        input += key;
-      }
-      lcd.setCursor(x,y);
-      lcd.print(input);
-      digitalWrite(2, HIGH); 
-      delay(100); 
-      digitalWrite(2, LOW); 
-      irrecv.resume();
-      
-    } 
-    
-  }
-  return input;
-}
-void clean_screen()
-{
-  for (int i=0; i<4; i++)
-  {
-    lcd.setCursor(0,i);
-    lcd.print("                              ");
-  }
+    else if(comd == "vi"){
+      vi();
+      return "";
+    }
+    return "Invalid Command";
 }
 
-int mainMenu()
-{
-  int menu_page_int = 1;
-  while (true)
-  {
-    lcd.setCursor(0,menu_page_int);
-    lcd.print("<>");
-    if (irrecv.decode(&results))
-    {
-      Serial.println(results.value);
-      if (results.value == 16718055)
-      {
-        menu_page_int--;
-        if (menu_page_int < 1)
-        {
-          menu_page_int=3;
-        }
-      }
-      else if(results.value == 16730805)
-      {
-        menu_page_int++;
-        if (menu_page_int > 3)
-        {
-          menu_page_int=1;
-        }
-      }
-      else if(results.value == 16726215)
-      {
-        break;
-      }
-      for (int i = 1; i < 4; i++)
-      {
-        lcd.setCursor(0,i);
-        lcd.print("  ");
-      }
-      lcd.setCursor(0,menu_page_int);
-      lcd.print("<>");
-      digitalWrite(2, HIGH); 
-      delay(100); 
-      digitalWrite(2, LOW);
-      irrecv.resume(); 
-    }
-  }
-  
-  return menu_page_int;
-}
-void writeStringToEEPROM(int addrOffset, const String &strToWrite)
-{
-  byte len = strToWrite.length();
-  EEPROM.write(addrOffset, len);
-  for (int i = 0; i < len; i++)
-  {
-    EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
-  }
-}
-String readStringFromEEPROM(int addrOffset)
-{
-  int newStrLen = EEPROM.read(addrOffset);
-  char data[newStrLen + 1];
-  for (int i = 0; i < newStrLen; i++)
-  {
-    data[i] = EEPROM.read(addrOffset + 1 + i);
-  }
-  return String(data);
-}
-void Erase()
-{
-  for (int i = 0; i < 1024; i++)
-  {
-    EEPROM.write(i, 255);
-  }
-}
 String ReadKeyboard(int result)
 {
-  Serial.println(result);
-  if (result == -9691)
-  {
-    return "a";
-  }
-  else if (result == -20911)
-  {
-    return "b";
-  }
-  else if (result == 30345)
-  {
-    return "c";
-  }
-  else if (result == -17851)
-  {
-    return "d";
-  }
-  else if (result == 24735)
-  {
-    return "e";
-  }
-  else if (result == 31365)
-  {
-    return "f";
-  }
-  else if (result == -1531)
-  {
-    return "g";
-  }
-  else if (result == 5865)
-  {
-    return "h";
-  }
-  else if (result == -5611)
-  {
-    return "i";
-  }
-  else if (result == -27031)
-  {
-    return "j";
-  }
-  else if (result == 22185)
-  {
-    return "k";
-  }
-  else if (result == -10711)
-  {
-    return "l";
-  }
-  else if (result == 7905)
-  {
-    return "m";
-  }
-  else if (result == 28305)
-  {
-    return "n";
-  }
-  else if (result == 6885)
-  {
-    return "o";
-  }
-  else if (result == -26011)
-  {
-    return "p";
-  }
-  else if (result == 8415)
-  {
-    return "q";
-  }
-  else if (result == 12495)
-  {
-    return "r";
-  }
-  else if (result == 15045)
-  {
-    return "s";
-  }
-  else if (result == -20401)
-  {
-    return "t";
-  }
-  else if (result == -27541)
-  {
-    return "u";
-  }
-  else if (result == 3825)
-  {
-    return "v";
-  }
-  else if (result == -24481)
-  {
-    return "w";
-  }
-  else if (result == -18871)
-  {
-    return "x";
-  }
-  else if (result == -4081)
-  {
-    return "y";
-  }
-  else if (result == 551499465)
-  {
-    return "z";
-  }
-  else if (result == 13260)
-  {
-    return " ";
-  }
-  else if (result == -14536)
-  {
-    return "<ENTER>";
-  }
-  else if (result == 31620)
-  {
-    return ",";
-  }
-  else if (result == 32640)
-  {
-    return ".";
-  }
-  else if (result == 21420)
-  {
-    return ":";
-  }
-  else if (result == 10200)
-  {
-    return "?";
-  }
-  else if (result == 18360)
-  {
-    return "<DELETE>";
-  }
-  else if(result == -23971)
-  {
-    return "1";
-  }
-  else if(result == 25245)
-  {
-    return "2";
-  }
-  else if(result == -7651)
-  {
-    return "3";
-  }
-  else if(result == 3021)
-  {
-    return "4";
-  }
-  else if(result == 765)
-  {
-    return "5";
-  }
-  else if(result == -15811)
-  {
-    return "6";
-  }
-  else if(result == -8161)
-  {
-    return "7";
-  }
-  else if(result ==  -22441)
-  {
-    return "8";
-  }
-  else if(result ==  -28561)
-  {
-    return "9";
-  }
-  else if(result ==  -26521)
-  {
-    return "0";
-  }
-  else if(result ==  14535)
-  {
-    return "<OK>";
-  }
-  return "";
+    if(result == -9691){return "a";}
+    else if(result == -20911){return "b";}
+    else if(result == 30345){return "c";}
+    else if(result == -17851){return "d";}
+    else if(result == 24735){return "e";}
+    else if(result == 31365){return "f";}
+    else if(result == -1531){return "g";}
+    else if(result == 5865){return "h";}
+    else if(result == -5611){return "i";}
+    else if(result == -27031){return "j";}
+    else if(result == 22185){return "k";}
+    else if(result == -10711){return "l";}
+    else if(result == 7905){return "m";}
+    else if(result == 28305){return "n";}
+    else if(result == 6885){return "o";}
+    else if(result == -26011){return "p";}
+    else if(result == 8415){return "q";}
+    else if(result == 12495){return "r";}
+    else if(result == 15045){return "s";}
+    else if(result == -20401){return "t";}
+    else if(result == -27541){return "u";}
+    else if(result == 3825){return "v";}
+    else if(result == -24481){return "w";}
+    else if(result == -18871){return "x";}
+    else if(result == -4081){return "y";}
+    else if(result == 551499465){return "z";}
+    else if(result == 13260){return " ";}
+    else if(result == -14536){return "<ENTER>";}
+    else if(result == 31620){return ",";}
+    else if(result == 32640){return ".";}
+    else if(result == 21420){return ":";}
+    else if(result == 10200){return "?";}
+    else if(result == 18360){return "<DELETE>";}
+    else if(result == -23971){return "1";}
+    else if(result == 25245){return "2";}
+    else if(result == -7651){return "3";}
+    else if(result == 8925){return "4";}
+    else if(result == 765){return "5";}
+    else if(result == -15811){return "6";}
+    else if(result == -8161){return "7";}
+    else if(result ==  -22441){return "8";}
+    else if(result ==  -28561){return "9";}
+    else if(result ==  -26521){return "0";}
+    else if(result ==  14535){return "<OK>";}
+    else{return "";}
 }
-  
