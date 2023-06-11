@@ -17,13 +17,15 @@ void setup()
     Serial.begin(9600);
     lcd.begin();
     lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("booting...");
+    Erase();
     pinMode(2, OUTPUT);  
     irrecv.enableIRIn();
     int bytes_empty = 0;
     int x = 0;
-    lcd.setCursor(0,0);
-    lcd.print("booting...");
-    for (int i=0; i < 1024; i++)
+    
+    for (int i=0; i < 512; i++)
     { 
       if (EEPROM.read(i) == 255)
       {
@@ -33,6 +35,7 @@ void setup()
       char data;
       if (x == 10)
       {
+        
         x = 0;
         Serial.print(" Byte:");
         Serial.print(i+1);
@@ -51,20 +54,21 @@ void setup()
       
     }
    Serial.print("\n");
-   Serial.print(1024-bytes_empty);
+   Serial.print(512-bytes_empty);
    Serial.print(" bytes ");
-   Serial.print("used out of 1024. ");
+   Serial.print("used out of 512. ");
    Serial.print(bytes_empty);
    Serial.print(" bytes left");
-   lcd.setCursor(0,0);
-   lcd.print(1024-bytes_empty);
-   lcd.print("/1024B   ");
-   lcd.setCursor(2,1);
+  lcd.setCursor(0,0);
+  lcd.print(512-bytes_empty);
+  lcd.print("/512B    ");
+  lcd.setCursor(2,1);
   lcd.print("Create Files");
   lcd.setCursor(2,2);
   lcd.print("Files");
   lcd.setCursor(2,3);
   lcd.print("Apps");
+  
 }
    
 
@@ -108,12 +112,12 @@ void create_file()
   len += String(fileName.length()).length();
   len += String(fileData.length()).length();
   int addr;
-  for (int i=0; i < 1024; i++)
+  for (int i=0; i < 512; i++)
   {
     int x = 0;
     if ( EEPROM.read(i) == 255 )
     {
-      for (int ii=i; ii < 1024; ii++)
+      for (int ii=i; ii < 512; ii++)
       {
         if (EEPROM.read(i) == 255)
         {
@@ -131,6 +135,7 @@ void create_file()
   Serial.println(addr);
   String input = String(fileName.length()) + fileName + String(fileData.length()) + fileData;
   writeStringToEEPROM(addr,input);
+  Serial.println(input);
   clean_screen();
   
 }
@@ -150,17 +155,21 @@ String keyboard_input(int x, int y, String button)
   {
     if (irrecv.decode(&results))
     {
-      
+      Serial.println(input[input.length()]);
       key = ReadKeyboard(results.value);
       if (key == "<DELETE>")
       {
         input = "";
         lcd.setCursor(x,y);
-        lcd.print("                             ");
+        lcd.print("                                                         ");
       }
       else if (key == button)
       {
         break;
+      }
+      else if(key == "<OK>" or key == "<ENTER>")
+      {
+        irrecv.resume();
       }
       else
       {
@@ -233,8 +242,10 @@ int mainMenu()
   
   return menu_page_int;
 }
+
 void writeStringToEEPROM(int addrOffset, const String &strToWrite)
 {
+  Serial.println(strToWrite);
   byte len = strToWrite.length();
   EEPROM.write(addrOffset, len);
   for (int i = 0; i < len; i++)
@@ -254,7 +265,7 @@ String readStringFromEEPROM(int addrOffset)
 }
 void Erase()
 {
-  for (int i = 0; i < 1024; i++)
+  for (int i = 0; i < 512; i++)
   {
     EEPROM.write(i, 255);
   }
