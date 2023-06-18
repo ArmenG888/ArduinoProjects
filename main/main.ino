@@ -125,9 +125,10 @@ void loop() {
         result_value = ReadKeyboard(results.value);
         if (menu_mode == 0){
             if (result_value == "<DELETE>"){
-              tft.drawGFXText(x, y," ", COLOR_WHITE); 
               y += h;
               x -= 10;
+              tft.drawGFXText(x, y," ", COLOR_WHITE); 
+              
             }
             else if (result_value != "" && result_value != "<ENTER>"){
               display_text(result_value);
