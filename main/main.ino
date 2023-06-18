@@ -57,102 +57,17 @@ int16_t x=0, y=20, w, h;
 int RECV_PIN = 7; 
 IRrecv irrecv(RECV_PIN);     
 decode_results results;    
-// Setup
-void setup() {
-  
-#if defined(ESP32)
-  hspi.begin();
-  tft.begin(hspi);
-#else
-  tft.begin();
-#endif
-  tft.clear();
-  tft.setGFXFont(&FreeMono9pt7b);  
-  String s3 = "!!!!~"; 
-  y += h; 
-  tft.drawGFXText(x, y, s3, COLOR_WHITE);
-  s3 = "$"; 
-  y += h; 
-  x += 10;
-  tft.drawGFXText(x, y, s3, COLOR_GREEN);
-  x += 10;
-  Serial.begin(9600);     
-  irrecv.enableIRIn();   
-}
-// Loop
 int menu_mode = 0;
 String command = "";
-void loop() {
-    if (irrecv.decode(&results)){  
+String result_value = "";
 
-        if (menu_mode == 0)
-        {
-            Serial.println(" ");     
-            Serial.print("Code: ");     
-            Serial.println(ReadKeyboard(results.value));   
-            if (ReadKeyboard(results.value) != "" && ReadKeyboard(results.value) != "<ENTER>"){
-              y += h; 
-              x += 10;
-              if (x == 170)
-              {
-                y += 20;
-                x = 0;
-              }
-              tft.drawGFXText(x, y,ReadKeyboard(results.value), COLOR_WHITE);
-              Serial.println(" ");   
-              command += ReadKeyboard(results.value);  
-            }
-            if (ReadKeyboard(results.value) == "<ENTER>"){
-                Serial.println(command); 
-                if (menu_mode == 0)
-                {
-                  y += 15;
-                  x = 0;
-                  y += h; 
-                  tft.drawGFXText(x, y, Command(command), COLOR_WHITE);
-                  y += 15;
-                  x = 0;
-                  y += h; 
-                  tft.drawGFXText(x, y, "~", COLOR_WHITE);
-                  y += h; 
-                  x += 10;
-                  tft.drawGFXText(x, y, "$", COLOR_GREEN);
-                  x += 10;
-                  command = "";
-                }
-            }
-            
-        }    
-        else if(menu_mode == 1)
-        {
-          if (ReadKeyboard(results.value) != "" && ReadKeyboard(results.value) != "<ENTER>"){
-              y += h; 
-              x += 10;
-              if (x == 170)
-              {
-                y += 20;
-                x = 0;
-              }
-              tft.drawGFXText(x, y,ReadKeyboard(results.value), COLOR_WHITE);
-              Serial.println(" ");   
-              command += ReadKeyboard(results.value);  
-          }
-          else if(ReadKeyboard(results.value) == "<ENTER>")
-          {
-              y += h + 20;
-              x = 0;
-              command += "\n";
-          }
-       }
-       irrecv.resume(); 
-    }   
-}
 void vi(){
   menu_mode = 1;
   tft.clear();
   x,y = 0,0;
   command = "";
 }
+
 String Command(String comd){
     if (comd == "cls" || comd == "clear"){
       y = 0;
@@ -164,6 +79,87 @@ String Command(String comd){
       return "";
     }
     return "Invalid Command";
+}
+
+void display_text(String text, String color="white"){
+  y += h; 
+  x += 10;
+  if (x >= 170)
+  {
+    y += 20;
+    x = 0;
+  }
+  if(color == "white")
+  {
+    tft.drawGFXText(x,y,text, COLOR_WHITE);  
+  }
+  else if(color == "green")
+  {
+    tft.drawGFXText(x,y,text, COLOR_GREEN);  
+  }
+  
+}
+
+// Setup
+void setup() {
+  
+#if defined(ESP32)
+  hspi.begin();
+  tft.begin(hspi);
+#else
+  tft.begin();
+#endif
+  tft.clear();
+  tft.setOrientation(2);
+  tft.setGFXFont(&FreeMono9pt7b);  
+  display_text("~");
+  display_text("$", "green");
+  x += 10;
+  Serial.begin(9600);     
+  irrecv.enableIRIn();   
+}
+
+// Loop
+void loop() {
+    if (irrecv.decode(&results)){  
+        result_value = ReadKeyboard(results.value);
+        if (menu_mode == 0){
+            if (result_value == "<DELETE>"){
+              tft.drawGFXText(x, y," ", COLOR_WHITE); 
+              y += h;
+              x -= 10;
+            }
+            else if (result_value != "" && result_value != "<ENTER>"){
+              display_text(result_value);
+              command += result_value;  
+            }
+            else if (result_value == "<ENTER>"){
+                y += 15;
+                x = 0;
+                y += h; 
+                tft.drawGFXText(x, y, Command(command), COLOR_WHITE);
+                x = 170;
+                display_text("~");
+                display_text("$", "green");
+                x += 10;
+                command = "";
+            }   
+        }    
+        else if(menu_mode == 1)
+        {
+          if (result_value != "" && result_value != "<ENTER>"){
+              display_text(result_value);   
+              command += result_value;  
+          }
+          else if(result_value == "<ENTER>")
+          {
+              y += h + 20;
+              x = 0;
+              command += "\n";
+          }
+       }
+       irrecv.resume(); 
+    }   
 }
 
 String ReadKeyboard(int result)
