@@ -1,12 +1,6 @@
 #include <IRremote.hpp>
-// Include application, user and local libraries
 #include "SPI.h"
 #include "TFT_22_ILI9225.h"
-
-// Include font definition files
-// NOTE: These files may not have all characters defined! Check the GFXfont def
-// params 3 + 4, e.g. 0x20 = 32 = space to 0x7E = 126 = ~
-
 #include <../fonts/FreeMono9pt7b.h>
 #include <../fonts/FreeSans24pt7b.h>
 
@@ -45,12 +39,7 @@ SPIClass hspi(HSPI);
 
 #define TFT_BRIGHTNESS 200 // Initial brightness of TFT backlight (optional)
 
-// Use hardware SPI (faster - on Uno: 13-SCK, 12-MISO, 11-MOSI)
 TFT_22_ILI9225 tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_LED, TFT_BRIGHTNESS);
-// Use software SPI (slower)
-//TFT_22_ILI9225 tft = TFT_22_ILI9225(TFT_RST, TFT_RS, TFT_CS, TFT_SDI, TFT_CLK, TFT_LED, TFT_BRIGHTNESS);
-
-// Variables and constants
 int16_t x=0, y=20, w, h;
 
 #include <IRremote.h>     
@@ -81,7 +70,7 @@ String Command(String comd){
     return "Invalid Command";
 }
 
-void display_text(String text, String color="white"){
+void display_text(String text, uint16_t color=COLOR_WHITE){
   y += h; 
   x += 10;
   if (x >= 170)
@@ -89,15 +78,7 @@ void display_text(String text, String color="white"){
     y += 20;
     x = 0;
   }
-  if(color == "white")
-  {
-    tft.drawGFXText(x,y,text, COLOR_WHITE);  
-  }
-  else if(color == "green")
-  {
-    tft.drawGFXText(x,y,text, COLOR_GREEN);  
-  }
-  
+  tft.drawGFXText(x,y,text, color);  
 }
 
 // Setup
@@ -113,15 +94,19 @@ void setup() {
   tft.setOrientation(2);
   tft.setGFXFont(&FreeMono9pt7b);  
   display_text("~");
-  display_text("$", "green");
+  display_text("$", COLOR_GREEN);
   x += 10;
   Serial.begin(9600);     
-  irrecv.enableIRIn();   
+  irrecv.enableIRIn();  
+  pinMode(2, OUTPUT); 
 }
 
 // Loop
 void loop() {
     if (irrecv.decode(&results)){  
+        digitalWrite(2, HIGH);   
+        delay(5);              
+        digitalWrite(2, LOW);              
         result_value = ReadKeyboard(results.value);
         if (menu_mode == 0){
             if (result_value == "<DELETE>"){
@@ -141,7 +126,7 @@ void loop() {
                 tft.drawGFXText(x, y, Command(command), COLOR_WHITE);
                 x = 170;
                 display_text("~");
-                display_text("$", "green");
+                display_text("$", COLOR_GREEN);
                 x += 10;
                 command = "";
             }   
