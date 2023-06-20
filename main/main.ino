@@ -50,6 +50,9 @@ int menu_mode = 0;
 String command = "";
 String result_value = "";
 
+
+uint16_t font_color = COLOR_WHITE;
+
 void vi(){
   menu_mode = 1;
   tft.clear();
@@ -67,6 +70,12 @@ String Command(String comd){
       vi();
       return "";
     }
+    for(char i;  
+    else if(comd.indexOf('font-color') != -1){
+      y = 0;
+      tft.clear();
+      return "";
+    }
     return "Invalid Command";
 }
 
@@ -80,7 +89,12 @@ void display_text(String text, uint16_t color=COLOR_WHITE){
   }
   tft.drawGFXText(x,y,text, color);  
 }
-
+void prompt(){
+  x = 170;
+  display_text("~");
+  display_text("$", COLOR_GREEN);
+  x += 10;
+}
 // Setup
 void setup() {
   
@@ -93,9 +107,8 @@ void setup() {
   tft.clear();
   tft.setOrientation(2);
   tft.setGFXFont(&FreeMono9pt7b);  
-  display_text("~");
-  display_text("$", COLOR_GREEN);
-  x += 10;
+  y -= 20;
+  prompt();
   Serial.begin(9600);     
   irrecv.enableIRIn();  
   pinMode(2, OUTPUT); 
@@ -124,10 +137,7 @@ void loop() {
                 x = 0;
                 y += h; 
                 tft.drawGFXText(x, y, Command(command), COLOR_WHITE);
-                x = 170;
-                display_text("~");
-                display_text("$", COLOR_GREEN);
-                x += 10;
+                prompt();
                 command = "";
             }   
         }    
@@ -141,7 +151,19 @@ void loop() {
           {
               y += h + 20;
               x = 0;
-              command += "\n";
+              command = "";
+          }
+          else if(result_value == " ")
+          {
+            command = "";
+          }
+          if(command == ":q"){
+            menu_mode = 0;
+            y = 0;
+            tft.clear();
+            x = 170;
+            prompt();
+            command = "";
           }
        }
        irrecv.resume(); 
